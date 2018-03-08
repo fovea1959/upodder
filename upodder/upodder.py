@@ -24,9 +24,9 @@ except NameError: pass
 parser = argparse.ArgumentParser(description='Download podcasts via the command line.')
 parser.add_argument('--no-download', action='store_true',
                    help="Don't download any files. Just mark as read.")
-parser.add_argument('--podcastdir', '-p', default='~/Downloads/podcasts', 
+parser.add_argument('--podcastdir', '-p', default='~/Downloads/podcasts',
     help="Folder to download podcast files to.")
-parser.add_argument('--basedir', '-b', default='~/.upodder', 
+parser.add_argument('--basedir', '-b', default='~/.upodder',
     help="Folder to store subscriptions and seen database.")
 parser.add_argument('--oldness', '-o', default=30, type=int,
     help="Skip entries older than X days.")
@@ -36,13 +36,14 @@ parser.add_argument('--import-opml', '-i', dest='opmlpath',
     help='Import feeds from an OPML file.')
 parser.add_argument("--quiet", help="Only output errors.",
                     action="store_true")
+parser.add_argument('--filename-format', '-f', default='{entry_title}.{filename_extension}',
+    help="File name format.")
 args = parser.parse_args()
 
 YES = [1,"1","on","yes","Yes","YES","y","Y","true","True","TRUE","t","T"]
 CONFIGCOMMENT = ['#',';','$',':','"',"'"]
 BADFNCHARS = re.compile(r'[^\w]+')
 TEMPDIR = '/tmp/upodder'
-FILENAME = '{entry_title}.{filename_extension}'
 
 # Initializing logging
 if args.quiet:
@@ -85,7 +86,7 @@ class EntryProcessor(object):
         if SeenEntry.select(SeenEntry.q.hashed == self.hashed).count() > 0:
             l.debug("Already seen: %s"%(entry['title']))
             return
-        
+
         # Let's check the entry's date
         if (dt.now() - self.pub_date).days > args.oldness:
             l.debug("Too old for us: %s"%entry['title'])
@@ -97,7 +98,7 @@ class EntryProcessor(object):
 
             # copy enclosure.type to entry.type for generate_filename processing.
             entry['type'] = enclosure.get('type')
-            
+
             if self._download_enclosure(enclosure, entry, feed, args.no_download):
                 SeenEntry( pub_date=self.pub_date, hashed=self.hashed)
             break
@@ -122,8 +123,8 @@ class EntryProcessor(object):
             with open(downloadto, 'wb') as f:
                 if 'content-length' in r.headers:
                     total_length = int(r.headers['content-length'])
-                    with tqdm(total=total_length, 
-                              unit="B", 
+                    with tqdm(total=total_length,
+                              unit="B",
                               unit_scale=True,
                               ncols=90) as pbar:
                         for chunk in r.iter_content(1024):
@@ -172,14 +173,14 @@ class EntryProcessor(object):
             'feed_title': re.sub(BADFNCHARS,'_',feed.feed.get('title',feed.href)),
             'filename_extension': FILE_TYPES.get(entry.get('type')),
         }
-        return FILENAME.format(**subst)
+        return args.filename_format.format(**subst)
 
 def process_feed(url):
     l.info('Downloading feed: %s' % url)
     feed = feedparser.parse(url)
 
     # Not all bozo errors cause total failure
-    if feed.bozo and isinstance(feed.bozo_exception, 
+    if feed.bozo and isinstance(feed.bozo_exception,
                                 (type(feedparser.NonXMLContentType), type(feedparser.CharacterEncodingOverride))):
         l.error("Erroneous feed URL: %s (%s)"%(url, type(feed.bozo_exception)))
         return
@@ -190,7 +191,7 @@ def process_feed(url):
         return
 
     l.info("Parsing feed: %s"%feed.feed.title)
-    
+
     feed.entries.reverse()
     for entry in feed.entries:
         EntryProcessor(entry, feed)
@@ -237,10 +238,9 @@ def main():
     for url in map(lambda x: x.strip(), open(expanduser(args.basedir) + os.sep + 'subscriptions')):
         if url and url[0] not in CONFIGCOMMENT:
             process_feed(url)
-    
+
     l.info('Done updating feeds.')
 
 
 if __name__ == '__main__':
     main()
-
