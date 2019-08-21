@@ -70,15 +70,23 @@ class SeenEntry(SQLObject):
     "Represents a single feed item, seen before. Used to keep track of download status."
     hashed = UnicodeCol()
     pub_date = DateTimeCol()
+    title = UnicodeCol()
+    guid = UnicodeCol()
+    description = UnicodeCol()
 
 class EntryProcessor(object):
     "Processes single feed entry"
     def __init__(self, entry, feed):
-        self.hashed = hashlib.sha1(entry['title'].encode('ascii', 'ignore')).hexdigest()
+        #self.hashed = hashlib.sha1(entry['title'].encode('ascii', 'ignore')).hexdigest()
+        self.title = entry.get('title', '')
+        self.description = entry.get('description', '')
+        self.guid = entry.get('guid', '') 
+        hashkey = '|'.join([self.title, self.description, self.guid]) 
+        self.hashed = hashlib.sha1(hashkey.encode('ascii', 'ignore')).hexdigest()
         self.pub_date = dt.fromtimestamp(time.mktime(entry.published_parsed))
 
         if args.mark_seen:
-            SeenEntry(pub_date=self.pub_date, hashed=self.hashed)
+            SeenEntry( pub_date=self.pub_date, hashed=self.hashed, guid=self.guid, title=self.title, description=self.description)
             l.debug("Marking as seen: %s"%(entry['title']))
             return
 
@@ -100,7 +108,7 @@ class EntryProcessor(object):
             entry['type'] = enclosure.get('type')
 
             if self._download_enclosure(enclosure, entry, feed, args.no_download):
-                SeenEntry( pub_date=self.pub_date, hashed=self.hashed)
+                SeenEntry( pub_date=self.pub_date, hashed=self.hashed, guid=self.guid, title=self.title, description=self.description)
             break
 
     def _download_enclosure(self, enclosure, entry, feed, no_download=False):
